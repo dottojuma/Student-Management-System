@@ -13,6 +13,10 @@ require_once "config.php";
 $fullname = $gender = $course = $email = $phone = "";
 $fullname_err = $gender_err = $course_err = $email_err = $phone_err = $photo_err = "";
 $web_score = $db_score = $net_score = "";
+
+// Bendera ya kuitisha EmailJS (Control Flags)
+$email_trigger = false;
+
 // Kuchakata data pale fomu itakapokuwa "submitted"
 if($_SERVER["REQUEST_METHOD"] == "POST"){
     
@@ -46,7 +50,7 @@ if($_SERVER["REQUEST_METHOD"] == "POST"){
         $email = trim($_POST["email"]);
     }
     
-    // 5. VALIDATION: Namba ya Simu (pamoja na REGEX uliyogundua)
+    // 5. VALIDATION: Namba ya Simu
     if(empty(trim($_POST["phone"]))){
         $phone_err = "Tafadhali jaza namba ya simu.";
     } else {
@@ -55,40 +59,40 @@ if($_SERVER["REQUEST_METHOD"] == "POST"){
             $phone_err = "Namba ya simu haipo sahihi. Tumia namba tu (Mfano: 0712345678).";
         }
     }
-     $web_score = !empty($_POST["web_score"]) ? intval($_POST["web_score"]) : 0;
-     $db_score = !empty($_POST["db_score"]) ? intval($_POST["db_score"]) : 0;
-     $net_score = !empty($_POST["net_score"]) ? intval($_POST["net_score"]) : 0;
+    
+    $web_score = !empty($_POST["web_score"]) ? intval($_POST["web_score"]) : 0;
+    $db_score = !empty($_POST["db_score"]) ? intval($_POST["db_score"]) : 0;
+    $net_score = !empty($_POST["net_score"]) ? intval($_POST["net_score"]) : 0;
 
-// MANTIKI YA KUPIGA HESABU ZA GPA (GPA Logic)
-function tafuta_pointi($score) {
-    if($score >= 70) return 5;
-    if($score >= 60) return 4;
-    if($score >= 50) return 3;
-    if($score >= 40) return 2;
-    if($score >= 35) return 1;
-    return 0;
-}
+    // MANTIKI YA KUPIGA HESABU ZA GPA (GPA Logic)
+    if (!function_exists('tafuta_pointi')) {
+        function tafuta_pointi($score) {
+            if($score >= 70) return 5;
+            if($score >= 60) return 4;
+            if($score >= 50) return 3;
+            if($score >= 40) return 2;
+            if($score >= 35) return 1;
+            return 0;
+        }
+    }
 
-$gpa = (tafuta_pointi($web_score) + tafuta_pointi($db_score) + tafuta_pointi($net_score)) / 3;
-$gpa = round($gpa, 2); // Weka katika muundo wa decimal mbili (mfano: 4.33)
+    $gpa = (tafuta_pointi($web_score) + tafuta_pointi($db_score) + tafuta_pointi($net_score)) / 3;
+    $gpa = round($gpa, 2); // Weka katika muundo wa decimal mbili
 
     // 6. KUCHAKATA PICHA (Photo Upload Logic)
-    $photo_name = "default.png"; // Jina la msingi kama picha haitapakiwa
+    $photo_name = "default.png"; 
 
     if(isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
         $file_tmp = $_FILES['photo']['tmp_name'];
         $file_name = $_FILES['photo']['name'];
         $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
         
-        // Ruhusu maumbo ya picha tu
         $allowed_ext = array('jpg', 'jpeg', 'png');
         
         if(in_array($file_ext, $allowed_ext)) {
-            // Badilisha jina la picha liwe la kipekee ili zisigongane
             $photo_name = time() . '_' . rand(1000, 9999) . '.' . $file_ext;
             $upload_path = 'uploads/' . $photo_name;
             
-            // Hamisha picha kwenda kwenye folder la uploads
             if(!move_uploaded_file($file_tmp, $upload_path)){
                 $photo_err = "Imeshindwa kuhifadhi picha kwenye server.";
             }
@@ -98,54 +102,32 @@ $gpa = round($gpa, 2); // Weka katika muundo wa decimal mbili (mfano: 4.33)
     }
     
     // 7. KAMA HAKUNA MAKOSA, WEKA DATA KWENYE DATABASE
-    if(empty($fullname_err) && empty($gender_err) && empty($course_err) && empty($email_err) && empty($phone_err) && empty($photo_err) && empty($web_score_err) && empty($db_score_err) && empty($net_score_err)){
+    if(empty($fullname_err) && empty($gender_err) && empty($course_err) && empty($email_err) && empty($phone_err) && empty($photo_err)){
         
-       $sql = "INSERT INTO students (fullname, gender, course, email, phone, photo, web_score, db_score, net_score, gpa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO students (fullname, gender, course, email, phone, photo, web_score, db_score, net_score, gpa) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-if($stmt = $conn->prepare($sql)){
-    // "ssssssiiid" -> strings 6, integers 3 za alama, na double/decimal 1 ya GPA
-    $stmt->bind_param("ssssssiiid", $param_fullname, $param_gender, $param_course, $param_email, $param_phone, $param_photo, $param_web, $param_db, $param_net, $param_gpa);
+        if($stmt = $conn->prepare($sql)){
+            $stmt->bind_param("ssssssiiid", $param_fullname, $param_gender, $param_course, $param_email, $param_phone, $param_photo, $param_web, $param_db, $param_net, $param_gpa);
 
-    $param_fullname = $fullname;
-    $param_gender = $gender;
-    $param_course = $course;
-    $param_email = $email;
-    $param_phone = $phone;
-    $param_photo = $photo_name;
-    $param_web = $web_score;
-    $param_db = $db_score;
-    $param_net = $net_score;
-    $param_gpa = $gpa;
+            $param_fullname = $fullname;
+            $param_gender = $gender;
+            $param_course = $course;
+            $param_email = $email;
+            $param_phone = $phone;
+            $param_photo = $photo_name;
+            $param_web = $web_score;
+            $param_db = $db_score;
+            $param_net = $net_score;
+            $param_gpa = $gpa;
 
-    if($stmt->execute()){
-                // ==================================================
-                // MFUMO WA TAARIFA KWA EMAIL (EMAIL NOTIFICATION LOGIC)
-                // ==================================================
-                $to_email = $email;
-                $subject = "Karibu Kwenye Mfumo - Student Management System";
-                
-                // Ujumbe wa Email
-                $message = "Habari " . $fullname . ",\n\n";
-                $message .= "Hongera! Umesajiliwa kikamilifu kwenye Student Management System.\n";
-                $message .= "Course yako iliyosajiliwa ni: " . $course . "\n\n";
-                $message .= "Asante,\nUongozi wa Chuo.";
-                
-                $headers = "From: no-reply@chuochetu.ac.tz\r\n" .
-                           "Reply-To: support@chuochetu.ac.tz\r\n" .
-                           "X-Mailer: PHP/" . phpversion();
-
-                // Hapa tunajaribu kutuma barua pepe kwa kutumia injini ya PHP
-                // Tumeongeza '@' mbele ili kuzuia makosa (errors) kuonekana ubaoni kama localhost haina mtandao
-                @mail($to_email, $subject, $message, $headers);
-                
-                // Ili kuthibitisha mbele ya Lecture (Kwenye Presentation), tunatunza ujumbe kwenye session ili tuuonyeshe
-                $_SESSION["email_sent_alert"] = "Barua pepe ya uthibitisho imetumwa kwenda kwa: " . $to_email;
-                // ==================================================
-
-                header("location: view_students.php");
-                exit();
+            if($stmt->execute()){
+                // Ruhusu JavaScript iwashe EmailJS baada ya kurun SQL kwa mafanikio
+                $email_trigger = true;
+            } else {
+                echo "Kuna kitu kimeenda mrama kwenye database execution.";
             }
-}
+            $stmt->close();
+        }
     }
     // Funga muunganisho
     $conn->close();
@@ -157,6 +139,15 @@ if($stmt = $conn->prepare($sql)){
 <head>
     <meta charset="UTF-8">
     <title>Add students - SMS</title>
+    
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <script type="text/javascript">
+        (function() {
+            // Akaunti yako ya Public Key kutoka EmailJS
+            emailjs.init("P8lfnwlgKxJlxRgoZ");
+        })();
+    </script>
+
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f6f9; padding: 20px; display: flex; justify-content: center; }
         .form-container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); width: 450px; }
@@ -209,33 +200,59 @@ if($stmt = $conn->prepare($sql)){
 
         <div class="form-group">
             <label>Phone Number</label>
-           <input type="tel" name="phone" value="<?php echo htmlspecialchars($phone); ?>">
+            <input type="tel" name="phone" value="<?php echo htmlspecialchars($phone); ?>">
             <div class="error-msg"><?php echo $phone_err; ?></div>
         </div>
+        
         <div class="form-group">
-    <label>student Photo</label>
-    <input type="file" name="photo" accept="image/*">
-</div>
-<div style="display: flex; gap: 10px;">
-    <div class="form-group" style="flex: 1;">
-        <label>web marks (0-100)</label>
-        <input type="number" name="web_score" min="0" max="100" required>
-    </div>
-    <div class="form-group" style="flex: 1;">
-        <label>Database  marks</label>
-        <input type="number" name="db_score" min="0" max="100" required>
-    </div>
-    <div class="form-group" style="flex: 1;">
-        <label>Network marks</label>
-        <input type="number" name="net_score" min="0" max="100" required>
-    </div>
-</div>
+            <label>student Photo</label>
+            <input type="file" name="photo" accept="image/*">
+            <div class="error-msg"><?php echo $photo_err; ?></div>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <div class="form-group" style="flex: 1;">
+                <label>web marks (0-100)</label>
+                <input type="number" name="web_score" min="0" max="100" required value="<?php echo htmlspecialchars($web_score); ?>">
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label>Database marks</label>
+                <input type="number" name="db_score" min="0" max="100" required value="<?php echo htmlspecialchars($db_score); ?>">
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label>Network marks</label>
+                <input type="number" name="net_score" min="0" max="100" required value="<?php echo htmlspecialchars($net_score); ?>">
+            </div>
+        </div>
+
         <div class="btn-box">
             <a href="dashboard.php" class="btn-cancel">Cancel</a>
             <input type="submit" class="btn-save" value="Save">
         </div>
     </form>
 </div>
+
+<?php if($email_trigger): ?>
+<script type="text/javascript">
+    // Hapa tunapitisha vigezo halisi kwenda kwenye Template ya EmailJS
+    var templateParams = {
+        student_name: "<?php echo $fullname; ?>",
+        student_email: "<?php echo $email; ?>",
+        student_course: "<?php echo $course; ?>",
+        student_gpa: "<?php echo $gpa; ?>"
+    };
+
+    // Sukuma email hewani kupitia lango la EmailJS
+    emailjs.send('service_05rj6cu', 'template_gepbjsa', templateParams)
+        .then(function(response) {
+            alert("SUCCESS! Mwanafunzi amehifadhiwa na Email ya Ukaribisho imetumwa!");
+            window.location.href = "view_students.php";
+        }, function(error) {
+            alert("Data zimehifadhiwa, lakini Email imefeli: " + JSON.stringify(error));
+            window.location.href = "view_students.php";
+        });
+</script>
+<?php endif; ?>
 
 </body>
 </html>
